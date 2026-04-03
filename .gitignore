@@ -10,9 +10,11 @@ venv/
 .vscode/
 
 # Existing generated artifacts from the original project
-/data/
-/models/
-/results/
+/data/*.csv
+/models/*.pkl
+/models/saved/
+/results/*.csv
+/results/*.png
 /main_output.txt
 /results_output.txt
 
@@ -22,4 +24,5 @@ venv/
 
 # Generated benchmark logs and transient files
 /benchmarks/results/*.log
-
+/benchmarks/results/*.docx
+~$*.docx

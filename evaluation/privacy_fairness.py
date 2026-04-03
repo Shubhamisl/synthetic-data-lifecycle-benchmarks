@@ -2,21 +2,21 @@
 privacy_fairness.py — Membership Inference Attack & Demographic Parity evaluation.
 """
 
-import os
-
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
+import config
+
 # ── Paths ────────────────────────────────────────────────────────────
 
-TRAIN_PATH = "data/adult_train.csv"
-TEST_PATH = "data/adult_test.csv"
-CTGAN_PATH = "results/ctgan_synthetic.csv"
-TVAE_PATH = "results/tvae_synthetic.csv"
-RESULTS_DIR = "results"
+TRAIN_PATH = config.DATA_DIR / "adult_train.csv"
+TEST_PATH = config.DATA_DIR / "adult_test.csv"
+CTGAN_PATH = config.RESULTS_DIR / "ctgan_synthetic.csv"
+TVAE_PATH = config.RESULTS_DIR / "tvae_synthetic.csv"
+RESULTS_DIR = config.RESULTS_DIR
 
 TARGET = "income"
 SENSITIVE = "sex"
@@ -119,8 +119,8 @@ def main():
         {"Model": "CTGAN", "MIA_Advantage": mia_ctgan,  "Demographic_Parity": dp_ctgan},
         {"Model": "TVAE",  "MIA_Advantage": mia_tvae,   "Demographic_Parity": dp_tvae},
     ])
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    out_path = os.path.join(RESULTS_DIR, "privacy_fairness_results.csv")
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = RESULTS_DIR / "privacy_fairness_results.csv"
     results_df.to_csv(out_path, index=False)
     print(f"\nResults saved to {out_path}")
 

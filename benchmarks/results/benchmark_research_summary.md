@@ -37,4 +37,4 @@ Two implementation details are important for correct interpretation of this run:
 - Bank categorical missing values were normalized to `"unknown"` before splitting and training.
 - Covertype CTGAN used only the true categorical or indicator columns as discrete features because the literal all-columns-discrete configuration exceeded available memory.
 
-These choices are documented in [benchmark_run_notes.md](D:/Project/synthetic_data_lifecycle/benchmarks/results/benchmark_run_notes.md).
+These choices are documented in `benchmark_run_notes.md`.

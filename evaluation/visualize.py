@@ -2,7 +2,6 @@
 visualize.py — Generate and save evaluation plots.
 """
 
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -31,8 +30,8 @@ def plot_column_distributions(
                 ax.hist(data[col].dropna(), bins=30, edgecolor="black", alpha=0.7)
             ax.set_title(f"{label} — {col}")
     plt.tight_layout()
-    path = os.path.join(config.RESULTS_DIR, f"distributions_{tag}.png")
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.RESULTS_DIR / f"distributions_{tag}.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"  Saved distribution plot → {path}")
@@ -54,8 +53,8 @@ def plot_correlation_heatmaps(
     sns.heatmap(synthetic[num_cols].corr(), annot=True, fmt=".2f", ax=ax2, cmap="coolwarm", vmin=-1, vmax=1)
     ax2.set_title("Synthetic data")
     plt.tight_layout()
-    path = os.path.join(config.RESULTS_DIR, f"correlations_{tag}.png")
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.RESULTS_DIR / f"correlations_{tag}.png"
     fig.savefig(path, dpi=150)
     plt.close(fig)
     print(f"  Saved correlation plot → {path}")
@@ -71,8 +70,8 @@ def save_metrics_table(metrics: dict, filename: str = "metrics_summary.csv"):
         else:
             rows.append({"category": section, "metric": section, "value": values})
     df = pd.DataFrame(rows)
-    path = os.path.join(config.RESULTS_DIR, filename)
-    os.makedirs(config.RESULTS_DIR, exist_ok=True)
+    config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.RESULTS_DIR / filename
     df.to_csv(path, index=False)
     print(f"  Saved metrics table → {path}")
     return df

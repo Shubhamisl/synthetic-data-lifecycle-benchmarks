@@ -2,6 +2,8 @@
 config.py — All hyperparameters in one place.
 """
 
+from pathlib import Path
+
 # ── Dataset ──────────────────────────────────────────────────────────
 DATASET_NAME = "adult"  # UCI Adult Income dataset
 UCI_DATASET_ID = 2       # ucimlrepo ID for Adult
@@ -42,6 +44,7 @@ FAIRNESS_SENSITIVE_FEATURE = "sex"
 FAIRNESS_TARGET = "income"
 
 # ── Paths ────────────────────────────────────────────────────────────
-DATA_DIR = "data"
-RESULTS_DIR = "results"
-MODEL_SAVE_DIR = "models/saved"
+PROJECT_ROOT = Path(__file__).resolve().parent
+DATA_DIR = PROJECT_ROOT / "data"
+RESULTS_DIR = PROJECT_ROOT / "results"
+MODEL_SAVE_DIR = PROJECT_ROOT / "models" / "saved"
