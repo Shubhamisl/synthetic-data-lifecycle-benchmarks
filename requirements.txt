@@ -1,0 +1,11 @@
+ctgan
+sdv
+sdmetrics
+tensorflow-privacy  # NOTE: may require tensorflow<2.16 for full estimator support
+fairlearn
+scikit-learn
+pandas
+numpy
+matplotlib
+seaborn
+ucimlrepo

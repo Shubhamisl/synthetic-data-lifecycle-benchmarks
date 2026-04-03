@@ -1,0 +1,25 @@
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environment and editor noise
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Existing generated artifacts from the original project
+/data/
+/models/
+/results/
+/main_output.txt
+/results_output.txt
+
+# Generated benchmark datasets and synthetic outputs
+/benchmarks/datasets/*.csv
+/benchmarks/synthetic/*.csv
+
+# Generated benchmark logs and transient files
+/benchmarks/results/*.log
+
