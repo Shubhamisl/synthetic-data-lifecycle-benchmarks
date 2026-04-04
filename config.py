@@ -48,3 +48,23 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 MODEL_SAVE_DIR = PROJECT_ROOT / "models" / "saved"
+
+# ── Direction 3: Privacy–Fairness–Fidelity Triangle ─────────────────
+DP_EPSILON_VALUES = {
+    "no_dp": None,
+    "eps_10": 10.0,
+    "eps_1": 1.0,
+    "eps_0_5": 0.5,
+    "eps_0_1": 0.1,
+}
+DP_EPOCHS = 300
+DP_BATCH_SIZE = 500
+DP_NOISE_DIM = 128
+DP_TARGET_DELTA = 1e-5
+DP_MAX_GRAD_NORM = 1.0
+DP_N_SYNTHETIC = 10_000
+DP_GENERATOR_DIMS = [256, 256]
+DP_DISC_DIMS = [256, 256]
+DP_SENSITIVE_COL = "sex"
+DP_TARGET_COL = "income"
+DP_MINORITY_CLASS = 1

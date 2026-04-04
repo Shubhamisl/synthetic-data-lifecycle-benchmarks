@@ -26,3 +26,4 @@ venv/
 /benchmarks/results/*.log
 /benchmarks/results/*.docx
 ~$*.docx
+/results/dp_direction3_dry_run.marker
