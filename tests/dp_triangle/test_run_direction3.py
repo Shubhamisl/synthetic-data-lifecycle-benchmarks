@@ -63,3 +63,24 @@ def test_dry_run_requires_expected_adult_shapes(tmp_path, monkeypatch):
         assert "expected shape" in str(exc)
     else:
         raise AssertionError("Expected dry-run shape validation to fail")
+
+
+def test_triangle_score_column_prefers_adjusted_metric():
+    from dp_triangle.run_direction3 import triangle_score_column
+
+    dashboard = pd.DataFrame(
+        {
+            "Triangle_Score": [0.70, 0.75],
+            "Triangle_Score_Adjusted": [0.70, 0.00],
+        }
+    )
+
+    assert triangle_score_column(dashboard) == "Triangle_Score_Adjusted"
+
+
+def test_triangle_score_column_falls_back_to_raw_metric():
+    from dp_triangle.run_direction3 import triangle_score_column
+
+    dashboard = pd.DataFrame({"Triangle_Score": [0.70, 0.75]})
+
+    assert triangle_score_column(dashboard) == "Triangle_Score"

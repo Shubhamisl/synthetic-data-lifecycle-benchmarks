@@ -38,23 +38,65 @@ REFERENCE_ROWS = [
 ]
 
 
+def triangle_score_column(dashboard_df: pd.DataFrame) -> str:
+    """
+    Choose the preferred triangle score column for reporting.
+
+    Inputs: dashboard dataframe.
+    Outputs: column name for the preferred triangle score.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: collapse-aware Direction 3 reporting design.
+    """
+    if "Triangle_Score_Adjusted" in dashboard_df.columns:
+        return "Triangle_Score_Adjusted"
+    return "Triangle_Score"
+
+
 def synthetic_path(variant: str) -> Path:
-    """Inputs: variant key. Outputs: synthetic CSV path. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 output specification."""
+    """
+    Return the synthetic CSV path for a variant.
+
+    Inputs: variant key.
+    Outputs: synthetic CSV path.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 output specification.
+    """
     return config.RESULTS_DIR / f"dp_synthetic_{variant}.csv"
 
 
 def model_path(variant: str) -> Path:
-    """Inputs: variant key. Outputs: saved model pickle path. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 output specification."""
+    """
+    Return the saved model path for a variant.
+
+    Inputs: variant key.
+    Outputs: saved model pickle path.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 output specification.
+    """
     return config.MODEL_SAVE_DIR / f"dp_ctgan_{variant}.pkl"
 
 
 def dry_run_marker_path() -> Path:
-    """Inputs: none. Outputs: dry-run marker path. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 dry-run cache invalidation design."""
+    """
+    Return the dry-run marker path.
+
+    Inputs: none.
+    Outputs: dry-run marker path.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 dry-run cache invalidation design.
+    """
     return config.RESULTS_DIR / "dp_direction3_dry_run.marker"
 
 
 def print_environment_banner() -> None:
-    """Inputs: none. Outputs: environment diagnostics to stdout. Lifecycle stage: Stage 7 — Orchestration. Reference: Colab execution requirements."""
+    """
+    Print Python, Torch, Opacus, and CUDA environment details.
+
+    Inputs: none.
+    Outputs: environment diagnostics to stdout.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Colab execution requirements.
+    """
     try:
         import opacus  # type: ignore
 
@@ -69,7 +111,14 @@ def print_environment_banner() -> None:
 
 
 def validate_adult_inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Inputs: none. Outputs: validated Adult train/test dataframes. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 dry-run and pre-flight requirements."""
+    """
+    Validate Adult train/test inputs and load them.
+
+    Inputs: none.
+    Outputs: validated Adult train/test dataframes.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 dry-run and pre-flight requirements.
+    """
     train_path = config.DATA_DIR / "adult_train.csv"
     test_path = config.DATA_DIR / "adult_test.csv"
     if not train_path.exists():
@@ -91,25 +140,51 @@ def validate_adult_inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def generate_dummy_synthetic_csvs(train_df: pd.DataFrame) -> None:
-    """Inputs: real Adult train dataframe. Outputs: one dummy synthetic CSV per epsilon variant. Lifecycle stage: Stage 7 — Dry-run validation. Reference: Direction 3 dry-run specification."""
+    """
+    Generate dummy synthetic CSVs for dry-run validation.
+
+    Inputs: real Adult train dataframe.
+    Outputs: one dummy synthetic CSV per epsilon variant.
+    Lifecycle stage: Stage 7 - Dry-run validation.
+    Reference: Direction 3 dry-run specification.
+    """
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     dry_run_marker_path().write_text("dry-run outputs present\n", encoding="utf-8")
     for key in config.DP_EPSILON_VALUES:
-        sampled = train_df.sample(n=config.DP_N_SYNTHETIC, replace=True, random_state=config.RANDOM_SEED).reset_index(drop=True)
+        sampled = train_df.sample(
+            n=config.DP_N_SYNTHETIC,
+            replace=True,
+            random_state=config.RANDOM_SEED,
+        ).reset_index(drop=True)
         sampled.to_csv(synthetic_path(key), index=False)
         print(f"[DRY-RUN] Generated dummy synthetic data for {key}")
 
 
 def estimate_training_minutes(pending_variants: list[str]) -> int:
-    """Inputs: uncached variant keys. Outputs: estimated total minutes for current device. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 runtime guidance."""
+    """
+    Estimate training time for the remaining variants.
+
+    Inputs: uncached variant keys.
+    Outputs: estimated total minutes for the current device.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 runtime guidance.
+    """
     device_key = "cuda" if torch.cuda.is_available() else "cpu"
     return int(sum(VARIANT_TIME_ESTIMATES[variant][device_key] for variant in pending_variants))
 
 
 def print_final_summary() -> None:
-    """Inputs: none. Outputs: formatted stdout summary table. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 final summary specification."""
+    """
+    Print the final Direction 3 summary tables.
+
+    Inputs: none.
+    Outputs: formatted stdout summary table.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 final summary specification.
+    """
     dashboard_df = pd.read_csv(config.RESULTS_DIR / "dp_triangle_dashboard.csv")
     subgroup_df = pd.read_csv(config.RESULTS_DIR / "dp_subgroup_fairness.csv").set_index("variant")
+    score_column = triangle_score_column(dashboard_df)
 
     print("═" * 68)
     print(" DIRECTION 3 RESULTS — Privacy–Fairness–Fidelity Triangle")
@@ -119,11 +194,13 @@ def print_final_summary() -> None:
     print("├─────────────┼────────┼───────┼──────────┼────────────┼──────────────┤")
     for variant in ["no_dp", "eps_10", "eps_1", "eps_0_5", "eps_0_1"]:
         row = dashboard_df.loc[dashboard_df["variant"] == variant].iloc[0]
+        marker = " *" if bool(row.get("Collapsed_Minority_Class", False)) else ""
+        label = f"{visualize_triangle.VARIANT_LABELS[variant]}{marker}"
         print(
-            f"│ {visualize_triangle.VARIANT_LABELS[variant]:<11} │ "
+            f"│ {label:<11} │ "
             f"{row['TSTR']:>6.2f}% │ {row['JS']:>5.3f} │ "
             f"{row['MIA_Advantage']:>8.3f} │ {row['Demo_Parity']:>10.3f} │ "
-            f"{row['Triangle_Score']:>10.3f} │"
+            f"{row[score_column]:>10.3f} │"
         )
     print("├─────────────┼────────┼───────┼──────────┼────────────┼──────────────┤")
     for label, tstr, js_value, mia_value, dp_value, triangle in REFERENCE_ROWS:
@@ -156,24 +233,50 @@ def print_final_summary() -> None:
                 f"{best_recovery['fairness_recovery_rate_%']:.2f}% recovered at "
                 f"{best_recovery['utility_cost']:.2f}% TSTR cost"
             )
-    best_triangle = dashboard_df.loc[dashboard_df["Triangle_Score"].idxmax()]
+
+    collapsed_mask = pd.Series(False, index=dashboard_df.index)
+    if "Collapsed_Minority_Class" in dashboard_df.columns:
+        collapsed_mask = dashboard_df["Collapsed_Minority_Class"].fillna(False).astype(bool)
+    collapsed = dashboard_df.loc[collapsed_mask]
+    if not collapsed.empty:
+        collapse_notes = ", ".join(
+            f"{row['epsilon_label']} ({row['Collapse_Reason']})"
+            for _, row in collapsed.iterrows()
+        )
+        print(f"  Collapsed variants:      {collapse_notes}")
+
+    best_triangle = dashboard_df.loc[dashboard_df[score_column].idxmax()]
     print(
         f"  Best Triangle Score:    {best_triangle['epsilon_label']} "
-        f"with score {best_triangle['Triangle_Score']:.3f}"
+        f"with score {best_triangle[score_column]:.3f}"
     )
     print(f"\nOutputs saved to: {config.RESULTS_DIR}")
     print("═" * 68)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
-    """Inputs: optional argv list. Outputs: parsed CLI namespace. Lifecycle stage: Stage 7 — Orchestration. Reference: standard argparse usage."""
+    """
+    Parse CLI arguments.
+
+    Inputs: optional argv list.
+    Outputs: parsed CLI namespace.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: standard argparse usage.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Inputs: optional CLI argv. Outputs: integer exit code. Lifecycle stage: Stage 7 — Orchestration. Reference: Direction 3 pipeline specification."""
+    """
+    Execute the Direction 3 pipeline.
+
+    Inputs: optional CLI argv.
+    Outputs: integer exit code.
+    Lifecycle stage: Stage 7 - Orchestration.
+    Reference: Direction 3 pipeline specification.
+    """
     args = parse_args(argv)
     config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     config.MODEL_SAVE_DIR.mkdir(parents=True, exist_ok=True)

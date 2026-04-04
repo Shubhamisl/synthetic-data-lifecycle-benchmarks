@@ -48,7 +48,9 @@ def derive_triangle_scores(
     tstr_accuracy: float,
     mia_advantage: float,
     demographic_parity: float,
-) -> dict[str, float]:
+    synthetic_positive_rate: float | None = None,
+    real_positive_rate: float | None = None,
+) -> dict[str, object]:
     """Inputs: TSTR percentage, MIA advantage, and demographic parity. Outputs: normalized privacy, utility, fairness, and triangle scores. Lifecycle stage: Stage 4 — Evaluation. Reference: synthetic data multi-objective ranking formulation adapted from the Direction 3 spec."""
     privacy_score = 1.0 - mia_advantage
     utility_score = tstr_accuracy / 100.0
@@ -58,11 +60,34 @@ def derive_triangle_scores(
         if math.isnan(fairness_score)
         else (privacy_score + utility_score + fairness_score) / 3.0
     )
+    if synthetic_positive_rate is None or real_positive_rate is None or real_positive_rate == 0:
+        positive_class_retention = math.nan
+    else:
+        positive_class_retention = synthetic_positive_rate / real_positive_rate
+    retention_penalty = (
+        math.nan
+        if pd.isna(positive_class_retention)
+        else max(0.0, min(float(positive_class_retention), 1.0))
+    )
+    collapsed_minority_class = (
+        synthetic_positive_rate is not None and math.isclose(float(synthetic_positive_rate), 0.0, abs_tol=1e-12)
+    )
+    collapse_reason = "positive_class_missing" if collapsed_minority_class else ""
+    triangle_score_adjusted = (
+        math.nan
+        if math.isnan(triangle_score) or pd.isna(retention_penalty)
+        else triangle_score * retention_penalty
+    )
     return {
         "Privacy_Score": privacy_score,
         "Utility_Score": utility_score,
         "Fairness_Score": fairness_score,
         "Triangle_Score": triangle_score,
+        "Synthetic_Positive_Rate": synthetic_positive_rate,
+        "Positive_Class_Retention": positive_class_retention,
+        "Collapsed_Minority_Class": collapsed_minority_class,
+        "Collapse_Reason": collapse_reason,
+        "Triangle_Score_Adjusted": triangle_score_adjusted,
     }
 
 
@@ -93,6 +118,8 @@ def compute_variant_metrics(
     tstr_value = base_metrics.tstr_accuracy(synth_df, real_test)
     mia_value = base_privacy.membership_inference_attack(real_train, synth_df)
     dp_value = base_privacy.demographic_parity(synth_df)
+    real_positive_rate = float((real_train[config.DP_TARGET_COL] == config.DP_MINORITY_CLASS).mean())
+    synthetic_positive_rate = float((synth_df[config.DP_TARGET_COL] == config.DP_MINORITY_CLASS).mean())
 
     female_test = real_test[real_test[config.DP_SENSITIVE_COL] == "Female"].reset_index(drop=True)
     high_income_test = real_test[real_test[config.DP_TARGET_COL] == config.DP_MINORITY_CLASS].reset_index(drop=True)
@@ -102,7 +129,13 @@ def compute_variant_metrics(
     female_degradation = tstr_value - tstr_female
     high_income_degradation = tstr_value - tstr_high_income
 
-    score_values = derive_triangle_scores(tstr_value, mia_value, dp_value)
+    score_values = derive_triangle_scores(
+        tstr_accuracy=tstr_value,
+        mia_advantage=mia_value,
+        demographic_parity=dp_value,
+        synthetic_positive_rate=synthetic_positive_rate,
+        real_positive_rate=real_positive_rate,
+    )
     return {
         "variant": variant,
         "epsilon_label": VARIANT_DISPLAY[variant],

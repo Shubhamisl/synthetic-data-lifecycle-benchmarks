@@ -50,3 +50,22 @@ def test_derive_triangle_scores_preserves_nan_fairness():
     assert scores["Utility_Score"] == pytest.approx(0.81)
     assert math.isnan(scores["Fairness_Score"])
     assert math.isnan(scores["Triangle_Score"])
+
+
+def test_derive_triangle_scores_penalizes_collapsed_positive_class():
+    from dp_triangle.evaluate_triangle import derive_triangle_scores
+
+    scores = derive_triangle_scores(
+        tstr_accuracy=75.0,
+        mia_advantage=0.5,
+        demographic_parity=0.0,
+        synthetic_positive_rate=0.0,
+        real_positive_rate=0.25,
+    )
+
+    assert scores["Synthetic_Positive_Rate"] == pytest.approx(0.0)
+    assert scores["Positive_Class_Retention"] == pytest.approx(0.0)
+    assert scores["Collapsed_Minority_Class"] is True
+    assert scores["Triangle_Score"] == pytest.approx((0.5 + 0.75 + 1.0) / 3.0)
+    assert scores["Triangle_Score_Adjusted"] == pytest.approx(0.0)
+    assert scores["Collapse_Reason"] == "positive_class_missing"
