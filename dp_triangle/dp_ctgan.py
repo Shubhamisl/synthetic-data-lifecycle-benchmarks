@@ -307,6 +307,46 @@ class DPCTGANSynthesizer:
         optimizer_class = type(optimizer)
         return optimizer_class(module.parameters(), **optimizer.defaults)
 
+    def _set_module_requires_grad(self, module: nn.Module, requires_grad: bool) -> None:
+        """
+        Toggle gradient tracking for all parameters in a module.
+
+        Inputs: module and desired requires_grad state.
+        Outputs: module parameters updated in place.
+        Lifecycle stage: Stage 2 - Generative Model Training.
+        Reference: Standard GAN practice freezes the discriminator during generator updates.
+        """
+        for parameter in module.parameters():
+            parameter.requires_grad_(requires_grad)
+
+    def _prepare_discriminator_for_generator_step(self) -> None:
+        """
+        Freeze discriminator parameters and disable Opacus hooks for generator training.
+
+        Inputs: none.
+        Outputs: discriminator updated in place for a non-DP generator pass.
+        Lifecycle stage: Stage 2 - Generative Model Training.
+        Reference: Opacus GradSampleModule hook control and GAN alternating-optimization pattern.
+        """
+        assert self.discriminator is not None
+        if hasattr(self.discriminator, "disable_hooks"):
+            self.discriminator.disable_hooks()
+        self._set_module_requires_grad(self.discriminator, False)
+
+    def _restore_discriminator_after_generator_step(self) -> None:
+        """
+        Re-enable discriminator gradients and Opacus hooks after generator training.
+
+        Inputs: none.
+        Outputs: discriminator restored for the next private discriminator step.
+        Lifecycle stage: Stage 2 - Generative Model Training.
+        Reference: Opacus GradSampleModule enable/disable hooks API.
+        """
+        assert self.discriminator is not None
+        self._set_module_requires_grad(self.discriminator, True)
+        if hasattr(self.discriminator, "enable_hooks"):
+            self.discriminator.enable_hooks()
+
     def _try_attach_privacy(self, optimizer_d: torch.optim.Optimizer, loader: DataLoader):
         """
         Wrap the discriminator with Opacus when epsilon is set.
@@ -341,6 +381,7 @@ class DPCTGANSynthesizer:
             target_epsilon=self.epsilon,
             target_delta=self.target_delta,
             max_grad_norm=self.max_grad_norm,
+            poisson_sampling=False,
         )
         self.discriminator = private_module
         return private_module, private_optimizer, private_loader, privacy_engine
@@ -390,13 +431,17 @@ class DPCTGANSynthesizer:
                 d_loss.backward()
                 optimizer_d.step()
 
-                optimizer_g.zero_grad()
-                noise = torch.randn(current_batch_size, self.noise_dim, device=self.device)
-                generated_batch = self.generator(noise)
-                generated_logits = self.discriminator(generated_batch)
-                g_loss = criterion(generated_logits, real_labels)
-                g_loss.backward()
-                optimizer_g.step()
+                self._prepare_discriminator_for_generator_step()
+                try:
+                    optimizer_g.zero_grad()
+                    noise = torch.randn(current_batch_size, self.noise_dim, device=self.device)
+                    generated_batch = self.generator(noise)
+                    generated_logits = self.discriminator(generated_batch)
+                    g_loss = criterion(generated_logits, real_labels)
+                    g_loss.backward()
+                    optimizer_g.step()
+                finally:
+                    self._restore_discriminator_after_generator_step()
 
                 batch_g_losses.append(float(g_loss.detach().cpu()))
                 batch_d_losses.append(float(d_loss.detach().cpu()))
