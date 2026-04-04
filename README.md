@@ -36,6 +36,49 @@ The cache-aware orchestrator is available at:
 python -m benchmarks.run_benchmarks
 ```
 
+## Direction 3 In Colab
+
+For the `dp_triangle/` pipeline, prefer the Colab-specific dependency set instead of the full base `requirements.txt`.
+The base requirements include `tensorflow-privacy`, which is not needed for Direction 3 and can fail on modern Colab images.
+
+Recommended Colab flow:
+
+```python
+!git clone https://github.com/Shubhamisl/synthetic-data-lifecycle-benchmarks.git
+%cd synthetic-data-lifecycle-benchmarks
+!pip install -q -r requirements_colab_direction3.txt
+!python -m data.loader
+!python -m dp_triangle.run_direction3 --dry-run
+```
+
+Before real training, remove the dry-run artifacts:
+
+```python
+from pathlib import Path
+
+results = Path("results")
+for path in results.glob("dp_synthetic_*.csv"):
+    path.unlink(missing_ok=True)
+
+for name in [
+    "dp_triangle_dashboard.csv",
+    "dp_subgroup_fairness.csv",
+    "dp_post_hoc_debiasing.csv",
+    "figure4_epsilon_tradeoff_curve.png",
+    "figure5_pff_radar_chart.png",
+    "figure6_intersectional_fairness.png",
+    "figure7_post_hoc_recovery.png",
+    "dp_direction3_dry_run.marker",
+]:
+    (results / name).unlink(missing_ok=True)
+```
+
+Then run the full experiment:
+
+```python
+!python -m dp_triangle.run_direction3
+```
+
 ## Benchmark Summaries
 
 Key saved outputs:

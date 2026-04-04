@@ -1,0 +1,12 @@
+ctgan
+sdv
+sdmetrics
+fairlearn>=0.10.0
+scikit-learn
+pandas
+numpy
+matplotlib
+seaborn
+ucimlrepo
+torch>=2.0.0
+opacus>=1.4.0
