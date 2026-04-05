@@ -228,6 +228,27 @@ def test_load_and_validate_adult_dataset_pair_rejects_invalid_evaluation_csv(tmp
         load_and_validate_adult_dataset_pair()
 
 
+def test_load_and_validate_adult_dataset_pair_allows_missing_evaluation_csv(tmp_path, monkeypatch):
+    source_train = tmp_path / "adult_train.csv"
+    source_test = tmp_path / "adult_test.csv"
+    missing_evaluation = tmp_path / "missing_eval.csv"
+    benchmark_root = tmp_path / "benchmarks"
+
+    pd.DataFrame({"age": [20, 30], "income": [0, 1], "sex": ["Female", "Male"]}).to_csv(source_train, index=False)
+    pd.DataFrame({"age": [40, 50], "income": [0, 1], "sex": ["Female", "Male"]}).to_csv(source_test, index=False)
+
+    monkeypatch.setattr("benchmarks.download_datasets.ADULT_TRAIN_SOURCE", source_train)
+    monkeypatch.setattr("benchmarks.download_datasets.ADULT_TEST_SOURCE", source_test)
+    monkeypatch.setattr("benchmarks.download_datasets.ADULT_EVALUATION_SOURCE", missing_evaluation)
+    monkeypatch.setattr("benchmarks.common.BENCHMARK_ROOT", benchmark_root)
+    monkeypatch.setattr("benchmarks.download_datasets.BENCHMARK_ROOT", benchmark_root)
+
+    train_df, test_df = load_and_validate_adult_dataset_pair()
+
+    assert list(train_df.columns) == ["age", "income", "sex"]
+    assert list(test_df.columns) == ["age", "income", "sex"]
+
+
 def test_load_and_validate_adult_dataset_pair_rejects_null_required_synthetic_metrics(tmp_path, monkeypatch):
     source_train = tmp_path / "adult_train.csv"
     source_test = tmp_path / "adult_test.csv"

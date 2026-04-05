@@ -297,7 +297,16 @@ def copy_adult_artifacts() -> tuple[pd.DataFrame, pd.DataFrame]:
     paths = get_dataset_paths("adult")
     shutil.copy2(ADULT_TRAIN_SOURCE, paths["train"])
     shutil.copy2(ADULT_TEST_SOURCE, paths["test"])
-    shutil.copy2(ADULT_EVALUATION_SOURCE, paths["evaluation"])
+    if ADULT_EVALUATION_SOURCE.exists():
+        shutil.copy2(ADULT_EVALUATION_SOURCE, paths["evaluation"])
+    else:
+        log_benchmark_event(
+            "download",
+            "adult",
+            "WARNING",
+            f"adult evaluation source missing at {ADULT_EVALUATION_SOURCE}; continuing without copied evaluation CSV",
+        )
+        paths["evaluation"].unlink(missing_ok=True)
     return pd.read_csv(paths["train"]), pd.read_csv(paths["test"])
 
 
@@ -326,7 +335,9 @@ def validate_adult_evaluation_csv(path) -> pd.DataFrame:
 def load_and_validate_adult_dataset_pair() -> tuple[pd.DataFrame, pd.DataFrame]:
     spec = DATASET_REGISTRY["adult"]
     train_df, test_df = copy_adult_artifacts()
-    validate_adult_evaluation_csv(get_dataset_paths("adult")["evaluation"])
+    evaluation_path = get_dataset_paths("adult")["evaluation"]
+    if evaluation_path.exists():
+        validate_adult_evaluation_csv(evaluation_path)
     validate_saved_dataset_pair(
         "adult",
         train_df,
