@@ -156,6 +156,42 @@ def generic_subgroup_tstr_accuracy(train_df: pd.DataFrame, test_df: pd.DataFrame
     return benchmark_tstr_accuracy(train_df, test_df, target_col)
 
 
+def safe_generic_demographic_parity_difference(spec, synth_df: pd.DataFrame) -> tuple[float, str]:
+    """
+    Compute supporting-dataset demographic parity without crashing on collapse.
+
+    Inputs: dataset spec and synthetic dataframe.
+    Outputs: tuple of demographic parity value and collapse reason, if any.
+    Lifecycle stage: Stage 4 - Evaluation.
+    Reference: collapse-aware Direction 3 reporting for supporting datasets.
+    """
+    if not spec.sensitive_attr:
+        return float("nan"), ""
+
+    present_groups = set(synth_df[spec.sensitive_attr].dropna().unique().tolist())
+    expected_groups = set(spec.sensitive_groups or ())
+    if expected_groups:
+        missing_groups = expected_groups - present_groups
+        unexpected_groups = present_groups - expected_groups
+        if missing_groups:
+            return float("nan"), "sensitive_group_missing"
+        if unexpected_groups:
+            return float("nan"), "unexpected_sensitive_groups"
+
+    if len(present_groups) != 2:
+        return float("nan"), "sensitive_group_missing"
+
+    return (
+        benchmark_demographic_parity_difference(
+            synth_df,
+            spec.sensitive_attr,
+            spec.target_col,
+            positive_value=spec.positive_class,
+        ),
+        "",
+    )
+
+
 def compute_variant_metrics(
     variant: str,
     epsilon_value: float | None,
@@ -232,16 +268,7 @@ def compute_generic_variant_metrics(
     )
     tstr_value = benchmark_tstr_accuracy(synth_df, real_test, spec.target_col)
     mia_value = benchmark_membership_inference_advantage(real_train, synth_df)
-    dp_value = (
-        benchmark_demographic_parity_difference(
-            synth_df,
-            spec.sensitive_attr,
-            spec.target_col,
-            positive_value=spec.positive_class,
-        )
-        if spec.sensitive_attr
-        else float("nan")
-    )
+    dp_value, sensitive_collapse_reason = safe_generic_demographic_parity_difference(spec, synth_df)
     real_positive_rate = None
     synthetic_positive_rate = None
     if spec.supports_full_triangle:
@@ -266,6 +293,16 @@ def compute_generic_variant_metrics(
         synthetic_positive_rate=synthetic_positive_rate,
         real_positive_rate=real_positive_rate,
     )
+    collapse_reasons: list[str] = []
+    if score_values["Collapse_Reason"]:
+        collapse_reasons.append(str(score_values["Collapse_Reason"]))
+    if sensitive_collapse_reason:
+        collapse_reasons.append(sensitive_collapse_reason)
+    if collapse_reasons:
+        score_values["Collapsed_Minority_Class"] = True
+        score_values["Collapse_Reason"] = ";".join(collapse_reasons)
+        score_values["Triangle_Score_Adjusted"] = 0.0
+
     return {
         "variant": variant,
         "epsilon_label": VARIANT_DISPLAY[variant],

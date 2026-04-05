@@ -122,6 +122,42 @@ def test_compute_generic_variant_metrics_uses_generic_subgroup_columns(monkeypat
     assert row["Sensitive_Subgroup_Label"] == "young"
 
 
+def test_compute_generic_variant_metrics_flags_sensitive_group_collapse(monkeypatch):
+    import pandas as pd
+
+    from dp_triangle.common import get_dataset_spec
+    from dp_triangle.evaluate_triangle import compute_generic_variant_metrics
+
+    spec = get_dataset_spec("bank")
+    real_train = pd.DataFrame(
+        {
+            "balance": [1, 2, 3, 4],
+            "target": [0, 1, 0, 1],
+            "age_group": ["young", "older", "young", "older"],
+        }
+    )
+    real_test = real_train.copy()
+    synth_df = pd.DataFrame(
+        {
+            "balance": [1, 2, 3, 4],
+            "target": [0, 1, 0, 1],
+            "age_group": ["young", "young", "young", "young"],
+        }
+    )
+
+    monkeypatch.setattr("dp_triangle.evaluate_triangle.benchmark_mean_js_divergence", lambda *args, **kwargs: 0.12)
+    monkeypatch.setattr("dp_triangle.evaluate_triangle.benchmark_tstr_accuracy", lambda *args, **kwargs: 80.0)
+    monkeypatch.setattr("dp_triangle.evaluate_triangle.benchmark_membership_inference_advantage", lambda *args, **kwargs: 0.2)
+    monkeypatch.setattr("dp_triangle.evaluate_triangle.numeric_feature_columns", lambda *args, **kwargs: ["balance"])
+
+    row = compute_generic_variant_metrics(spec, "eps_1", 1.0, real_train, real_test, synth_df)
+
+    assert math.isnan(row["Demo_Parity"])
+    assert row["Collapsed_Minority_Class"] is True
+    assert row["Collapse_Reason"] == "sensitive_group_missing"
+    assert row["Triangle_Score_Adjusted"] == pytest.approx(0.0)
+
+
 def test_compute_generic_variant_metrics_handles_privacy_utility_only_dataset(monkeypatch):
     import pandas as pd
 
