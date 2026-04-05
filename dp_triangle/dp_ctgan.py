@@ -120,6 +120,9 @@ class DPCTGANSynthesizer:
         target_delta: float = 1e-5,
         max_grad_norm: float = 1.0,
         random_seed: int = 42,
+        target_col: str = config.DP_TARGET_COL,
+        sensitive_col: str | None = config.DP_SENSITIVE_COL,
+        metadata_dir: Path | None = None,
     ) -> None:
         """
         Configure the synthesizer.
@@ -136,6 +139,9 @@ class DPCTGANSynthesizer:
         self.target_delta = target_delta
         self.max_grad_norm = max_grad_norm
         self.random_seed = random_seed
+        self.target_col = target_col
+        self.sensitive_col = sensitive_col
+        self.metadata_dir = metadata_dir or config.MODEL_SAVE_DIR
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.generator: Generator | None = None
@@ -180,9 +186,9 @@ class DPCTGANSynthesizer:
         Reference: Direction 3 preprocessing persistence specification.
         """
         return {
-            "encoder": config.MODEL_SAVE_DIR / "dp_encoder.pkl",
-            "scaler": config.MODEL_SAVE_DIR / "dp_scaler.pkl",
-            "metadata": config.MODEL_SAVE_DIR / "dp_metadata.json",
+            "encoder": self.metadata_dir / "dp_encoder.pkl",
+            "scaler": self.metadata_dir / "dp_scaler.pkl",
+            "metadata": self.metadata_dir / "dp_metadata.json",
         }
 
     def _fit_preprocessors(self, train_df: pd.DataFrame) -> np.ndarray:
@@ -195,7 +201,7 @@ class DPCTGANSynthesizer:
         Reference: Direction 3 preprocessing specification.
         """
         self.column_order = train_df.columns.tolist()
-        self.categorical_cols = train_df.select_dtypes(include=["object", "category"]).columns.tolist()
+        self.categorical_cols = train_df.select_dtypes(include=["object", "category", "string"]).columns.tolist()
         self.numerical_cols = [column for column in self.column_order if column not in self.categorical_cols]
         self.original_dtypes = {column: str(dtype) for column, dtype in train_df.dtypes.items()}
         self._fallback_train_df = train_df.copy()
@@ -231,7 +237,7 @@ class DPCTGANSynthesizer:
         Lifecycle stage: Stage 2 - Generative Model Training.
         Reference: Direction 3 preprocessing persistence specification.
         """
-        config.MODEL_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+        self.metadata_dir.mkdir(parents=True, exist_ok=True)
         path_map = self._metadata_paths()
         with path_map["encoder"].open("wb") as handle:
             pickle.dump(self.ordinal_encoder, handle)
@@ -241,8 +247,8 @@ class DPCTGANSynthesizer:
             "column_order": self.column_order,
             "categorical_cols": self.categorical_cols,
             "numerical_cols": self.numerical_cols,
-            "target_col": config.DP_TARGET_COL,
-            "sensitive_col": config.DP_SENSITIVE_COL,
+            "target_col": self.target_col,
+            "sensitive_col": self.sensitive_col,
         }
         path_map["metadata"].write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
@@ -529,8 +535,8 @@ class DPCTGANSynthesizer:
 
         out_df = pd.DataFrame(decoded)
         out_df = out_df[self.column_order]
-        if config.DP_TARGET_COL in out_df.columns and "int" in self.original_dtypes.get(config.DP_TARGET_COL, ""):
-            out_df[config.DP_TARGET_COL] = out_df[config.DP_TARGET_COL].round().astype(int)
+        if self.target_col in out_df.columns and "int" in self.original_dtypes.get(self.target_col, ""):
+            out_df[self.target_col] = out_df[self.target_col].round().astype(int)
         return out_df
 
     def _fallback_sample(self, n: int) -> pd.DataFrame:
@@ -549,8 +555,8 @@ class DPCTGANSynthesizer:
             sampled[column] = sampled[column].astype(float) + noise
             if "int" in self.original_dtypes.get(column, ""):
                 sampled[column] = sampled[column].round().astype(int)
-        if config.DP_TARGET_COL in sampled.columns and "int" in self.original_dtypes.get(config.DP_TARGET_COL, ""):
-            sampled[config.DP_TARGET_COL] = sampled[config.DP_TARGET_COL].round().astype(int)
+        if self.target_col in sampled.columns and "int" in self.original_dtypes.get(self.target_col, ""):
+            sampled[self.target_col] = sampled[self.target_col].round().astype(int)
         return sampled[self.column_order]
 
     def sample(self, n: int) -> pd.DataFrame:

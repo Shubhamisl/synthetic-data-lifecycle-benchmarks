@@ -7,6 +7,77 @@ import numpy as np
 import torch
 
 
+def test_persist_preprocessors_uses_dataset_metadata(tmp_path, monkeypatch):
+    import json
+    import pandas as pd
+
+    import config
+    from dp_triangle.dp_ctgan import DPCTGANSynthesizer
+
+    model_dir = tmp_path / "models" / "saved"
+    model_dir.mkdir(parents=True)
+    monkeypatch.setattr(config, "MODEL_SAVE_DIR", model_dir)
+
+    train_df = pd.DataFrame(
+        {
+            "feature_cat": ["a", "b", "a"],
+            "feature_num": [1.0, 2.0, 3.0],
+            "target": [0, 1, 0],
+            "age_group": ["young", "older", "young"],
+        }
+    )
+
+    synthesizer = DPCTGANSynthesizer(
+        epsilon=None,
+        epochs=1,
+        batch_size=2,
+        noise_dim=8,
+        target_col="target",
+        sensitive_col="age_group",
+    )
+    synthesizer._fit_preprocessors(train_df)
+
+    metadata_path = model_dir / "dp_metadata.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert metadata["target_col"] == "target"
+    assert metadata["sensitive_col"] == "age_group"
+    assert metadata["column_order"] == ["feature_cat", "feature_num", "target", "age_group"]
+
+
+def test_persist_preprocessors_scopes_metadata_to_dataset_model_dir(tmp_path):
+    import json
+    import pandas as pd
+
+    from dp_triangle.dp_ctgan import DPCTGANSynthesizer
+
+    model_dir = tmp_path / "bank_models"
+    train_df = pd.DataFrame(
+        {
+            "feature_cat": ["a", "b", "a"],
+            "feature_num": [1.0, 2.0, 3.0],
+            "target": [0, 1, 0],
+            "age_group": ["young", "older", "young"],
+        }
+    )
+
+    synthesizer = DPCTGANSynthesizer(
+        epsilon=None,
+        epochs=1,
+        batch_size=2,
+        noise_dim=8,
+        target_col="target",
+        sensitive_col="age_group",
+        metadata_dir=model_dir,
+    )
+    synthesizer._fit_preprocessors(train_df)
+
+    metadata = json.loads((model_dir / "dp_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["target_col"] == "target"
+    assert (model_dir / "dp_encoder.pkl").exists()
+    assert (model_dir / "dp_scaler.pkl").exists()
+
+
 def test_try_attach_privacy_rebinds_optimizer_when_validator_replaces_module(monkeypatch):
     from dp_triangle.dp_ctgan import DPCTGANSynthesizer
 
