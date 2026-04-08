@@ -3,12 +3,14 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from benchmarks import benchmark_models
+from benchmarks.benchmark_models import BenchmarkModelSpec
 from benchmarks.train_benchmark_models import (
+    _coerce_covertype_targets,
+    _print_dataset_completion,
+    _process_training_dataset,
     copy_adult_synthetic_artifacts,
     detect_ctgan_discrete_columns,
-    _process_training_dataset,
-    _print_dataset_completion,
-    _coerce_covertype_targets,
     validate_synthetic_dataset,
 )
 
@@ -70,25 +72,46 @@ def test_copy_adult_synthetic_artifacts_copies_expected_files(tmp_path, monkeypa
 
     monkeypatch.setattr("benchmarks.common.BENCHMARK_ROOT", benchmark_root)
     monkeypatch.setattr("benchmarks.train_benchmark_models.BENCHMARK_ROOT", benchmark_root)
-    monkeypatch.setattr("benchmarks.train_benchmark_models.ADULT_CTGAN_SOURCE", source_ctgan)
-    monkeypatch.setattr("benchmarks.train_benchmark_models.ADULT_TVAE_SOURCE", source_tvae)
+    monkeypatch.setattr("benchmarks.train_benchmark_models._benchmark_model_ids", lambda: ("ctgan", "tvae"))
+    monkeypatch.setattr(
+        benchmark_models,
+        "BENCHMARK_MODELS",
+        {
+            "ctgan": BenchmarkModelSpec(
+                model_id="ctgan",
+                display_name="CTGAN",
+                trainable=True,
+                adult_source_path=source_ctgan,
+            ),
+            "tvae": BenchmarkModelSpec(
+                model_id="tvae",
+                display_name="TVAE",
+                trainable=True,
+                adult_source_path=source_tvae,
+            ),
+        },
+    )
 
-    ctgan_df, tvae_df = copy_adult_synthetic_artifacts()
+    outputs = copy_adult_synthetic_artifacts()
 
     assert (benchmark_root / "synthetic" / "adult_ctgan.csv").exists()
     assert (benchmark_root / "synthetic" / "adult_tvae.csv").exists()
-    assert ctgan_df.equals(pd.read_csv(benchmark_root / "synthetic" / "adult_ctgan.csv"))
-    assert tvae_df.equals(pd.read_csv(benchmark_root / "synthetic" / "adult_tvae.csv"))
+    assert set(outputs) == {"ctgan", "tvae"}
+    assert outputs["ctgan"].equals(pd.read_csv(benchmark_root / "synthetic" / "adult_ctgan.csv"))
+    assert outputs["tvae"].equals(pd.read_csv(benchmark_root / "synthetic" / "adult_tvae.csv"))
 
 
 def test_print_dataset_completion_matches_required_output(capsys):
-    ctgan_df = pd.DataFrame({"target": [0, 1], "feature": [1.0, 2.0]})
-    tvae_df = pd.DataFrame({"target": [1, 0], "feature": [3.0, 4.0]})
+    outputs = {
+        "ctgan": pd.DataFrame({"target": [0, 1], "feature": [1.0, 2.0]}),
+        "tvae": pd.DataFrame({"target": [1, 0], "feature": [3.0, 4.0]}),
+        "tabddpm": pd.DataFrame({"target": [0, 1], "feature": [5.0, 6.0]}),
+    }
 
-    _print_dataset_completion("bank", "target", ctgan_df, tvae_df)
+    _print_dataset_completion("bank", "target", outputs)
 
     assert capsys.readouterr().out.splitlines() == [
-        "bank - CTGAN complete ✓  |  TVAE complete ✓",
+        "bank - CTGAN complete | TVAE complete | TABDDPM complete",
         "Synthetic shape: (2, 2)",
         "Target distribution: {0: 1, 1: 1}",
     ]
@@ -123,6 +146,7 @@ def test_process_training_dataset_raises_and_does_not_leave_invalid_artifacts(tm
             train_df=train_df,
             target_col="target",
             valid_targets={0, 1},
+            model_ids=("ctgan", "tvae"),
             ctgan_sampler=bad_ctgan_sampler,
             tvae_sampler=unused_tvae_sampler,
         )
@@ -152,6 +176,7 @@ def test_process_training_dataset_rejects_nan_training_inputs_before_sampling(tm
             train_df=train_df,
             target_col="target",
             valid_targets={0, 1},
+            model_ids=("ctgan", "tvae"),
             ctgan_sampler=should_not_run_ctgan,
             tvae_sampler=should_not_run_tvae,
         )
@@ -173,11 +198,200 @@ def test_copy_adult_synthetic_artifacts_does_not_promote_invalid_outputs(tmp_pat
 
     monkeypatch.setattr("benchmarks.common.BENCHMARK_ROOT", benchmark_root)
     monkeypatch.setattr("benchmarks.train_benchmark_models.BENCHMARK_ROOT", benchmark_root)
-    monkeypatch.setattr("benchmarks.train_benchmark_models.ADULT_CTGAN_SOURCE", source_ctgan)
-    monkeypatch.setattr("benchmarks.train_benchmark_models.ADULT_TVAE_SOURCE", source_tvae)
+    monkeypatch.setattr("benchmarks.train_benchmark_models._benchmark_model_ids", lambda: ("ctgan", "tvae"))
+    monkeypatch.setattr(
+        benchmark_models,
+        "BENCHMARK_MODELS",
+        {
+            "ctgan": BenchmarkModelSpec(
+                model_id="ctgan",
+                display_name="CTGAN",
+                trainable=True,
+                adult_source_path=source_ctgan,
+            ),
+            "tvae": BenchmarkModelSpec(
+                model_id="tvae",
+                display_name="TVAE",
+                trainable=True,
+                adult_source_path=source_tvae,
+            ),
+        },
+    )
 
     with pytest.raises(ValueError, match="invalid target"):
         copy_adult_synthetic_artifacts()
 
     assert not (benchmark_root / "synthetic" / "adult_ctgan.csv").exists()
     assert not (benchmark_root / "synthetic" / "adult_tvae.csv").exists()
+
+
+def test_copy_adult_synthetic_artifacts_rejects_registry_tabddpm_when_backend_unavailable(tmp_path, monkeypatch):
+    source_ctgan = tmp_path / "ctgan_source.csv"
+    source_tvae = tmp_path / "tvae_source.csv"
+    benchmark_root = tmp_path / "benchmarks"
+    (benchmark_root / "datasets").mkdir(parents=True, exist_ok=True)
+    (benchmark_root / "synthetic").mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame({"income": [0, 1], "sex": ["Female", "Male"]}).to_csv(source_ctgan, index=False)
+    pd.DataFrame({"income": [1, 0], "sex": ["Male", "Female"]}).to_csv(source_tvae, index=False)
+    pd.DataFrame({"income": [0, 1], "sex": ["Female", "Male"]}).to_csv(
+        benchmark_root / "datasets" / "adult_train.csv",
+        index=False,
+    )
+
+    monkeypatch.setattr("benchmarks.common.BENCHMARK_ROOT", benchmark_root)
+    monkeypatch.setattr("benchmarks.train_benchmark_models.BENCHMARK_ROOT", benchmark_root)
+    monkeypatch.setattr("benchmarks.train_benchmark_models._benchmark_model_ids", lambda: ("ctgan", "tvae", "tabddpm"))
+    monkeypatch.setattr(
+        benchmark_models,
+        "BENCHMARK_MODELS",
+        {
+            "ctgan": BenchmarkModelSpec(
+                model_id="ctgan",
+                display_name="CTGAN",
+                trainable=True,
+                adult_source_path=source_ctgan,
+            ),
+            "tvae": BenchmarkModelSpec(
+                model_id="tvae",
+                display_name="TVAE",
+                trainable=True,
+                adult_source_path=source_tvae,
+            ),
+            "tabddpm": BenchmarkModelSpec(
+                model_id="tabddpm",
+                display_name="TABDDPM",
+                available=False,
+                trainable=False,
+                adult_source_path=None,
+            ),
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="TABDDPM benchmark adapter requires synthcity"):
+        copy_adult_synthetic_artifacts()
+
+
+def test_copy_adult_synthetic_artifacts_uses_tabddpm_adapter_when_registered(tmp_path, monkeypatch):
+    source_ctgan = tmp_path / "ctgan_source.csv"
+    source_tvae = tmp_path / "tvae_source.csv"
+    benchmark_root = tmp_path / "benchmarks"
+    (benchmark_root / "datasets").mkdir(parents=True, exist_ok=True)
+    (benchmark_root / "synthetic").mkdir(parents=True, exist_ok=True)
+
+    pd.DataFrame({"income": [0, 1], "sex": ["Female", "Male"]}).to_csv(source_ctgan, index=False)
+    pd.DataFrame({"income": [1, 0], "sex": ["Male", "Female"]}).to_csv(source_tvae, index=False)
+    pd.DataFrame({"income": [0, 1], "sex": ["Female", "Male"]}).to_csv(
+        benchmark_root / "datasets" / "adult_train.csv",
+        index=False,
+    )
+
+    monkeypatch.setattr("benchmarks.common.BENCHMARK_ROOT", benchmark_root)
+    monkeypatch.setattr("benchmarks.train_benchmark_models.BENCHMARK_ROOT", benchmark_root)
+    monkeypatch.setattr("benchmarks.train_benchmark_models._benchmark_model_ids", lambda: ("ctgan", "tvae", "tabddpm"))
+    monkeypatch.setattr(
+        benchmark_models,
+        "BENCHMARK_MODELS",
+        {
+            "ctgan": BenchmarkModelSpec(
+                model_id="ctgan",
+                display_name="CTGAN",
+                trainable=True,
+                adult_source_path=source_ctgan,
+            ),
+            "tvae": BenchmarkModelSpec(
+                model_id="tvae",
+                display_name="TVAE",
+                trainable=True,
+                adult_source_path=source_tvae,
+            ),
+            "tabddpm": BenchmarkModelSpec(
+                model_id="tabddpm",
+                display_name="TABDDPM",
+                trainable=True,
+                adult_source_path=None,
+            ),
+        },
+    )
+
+    monkeypatch.setattr(
+        "benchmarks.train_benchmark_models._train_tabddpm_samples",
+        lambda dataset_name, train_df, target_col: pd.DataFrame({"income": [1, 0], "sex": ["Female", "Male"]}),
+        raising=False,
+    )
+
+    outputs = copy_adult_synthetic_artifacts()
+
+    assert set(outputs) == {"ctgan", "tvae", "tabddpm"}
+    assert (benchmark_root / "synthetic" / "adult_tabddpm.csv").exists()
+    assert outputs["tabddpm"].equals(pd.read_csv(benchmark_root / "synthetic" / "adult_tabddpm.csv"))
+
+
+def test_process_training_dataset_follows_registry_model_order(monkeypatch):
+    train_df = pd.DataFrame({"target": [0, 1], "feature": [1.0, 2.0]})
+    sampler_calls: list[str] = []
+    promote_calls: list[str] = []
+    warnings_seen: list[str] = []
+    completion_calls: list[tuple[str, str, dict[str, pd.DataFrame]]] = []
+
+    monkeypatch.setattr("benchmarks.train_benchmark_models._benchmark_model_ids", lambda: ("tvae", "tabddpm", "ctgan"))
+
+    def ctgan_sampler(dataset_name: str, df: pd.DataFrame) -> pd.DataFrame:
+        sampler_calls.append("ctgan")
+        return df.copy()
+
+    def tvae_sampler(df: pd.DataFrame) -> pd.DataFrame:
+        sampler_calls.append("tvae")
+        return df.copy()
+
+    def tabddpm_sampler(dataset_name: str, df: pd.DataFrame, target_col: str) -> pd.DataFrame:
+        sampler_calls.append("tabddpm")
+        return df.copy()
+
+    def fake_promote(
+        dataset_name: str,
+        model_name: str,
+        train_df: pd.DataFrame,
+        synth_df: pd.DataFrame,
+        target_col: str,
+        valid_targets: set[int] | set[str] | None,
+        expected_rows: int | None = None,
+    ) -> tuple[pd.DataFrame, list[str]]:
+        promote_calls.append(model_name)
+        return synth_df, [f"{model_name}-warning"]
+
+    monkeypatch.setattr("benchmarks.train_benchmark_models._validate_and_promote_synthetic", fake_promote)
+    monkeypatch.setattr("benchmarks.train_benchmark_models._warn", lambda dataset_name, message: warnings_seen.append(message))
+    monkeypatch.setattr(
+        "benchmarks.train_benchmark_models._print_dataset_completion",
+        lambda dataset_name, target_col, saved_outputs: completion_calls.append((dataset_name, target_col, saved_outputs)),
+    )
+
+    _process_training_dataset(
+        "bank",
+        train_df=train_df,
+        target_col="target",
+        valid_targets={0, 1},
+        ctgan_sampler=ctgan_sampler,
+        tvae_sampler=tvae_sampler,
+        tabddpm_sampler=tabddpm_sampler,
+    )
+
+    assert sampler_calls == ["tvae", "tabddpm", "ctgan"]
+    assert promote_calls == ["tvae", "tabddpm", "ctgan"]
+    assert warnings_seen == ["tvae-warning", "tabddpm-warning", "ctgan-warning"]
+    assert completion_calls and completion_calls[0][0] == "bank"
+    assert tuple(completion_calls[0][2]) == ("tvae", "tabddpm", "ctgan")
+
+
+def test_process_training_dataset_raises_clear_error_when_tabddpm_adapter_is_unavailable():
+    train_df = pd.DataFrame({"target": [0, 1], "feature": [1.0, 2.0]})
+
+    with pytest.raises(RuntimeError, match="TABDDPM benchmark adapter is not configured"):
+        _process_training_dataset(
+            "bank",
+            train_df=train_df,
+            target_col="target",
+            valid_targets={0, 1},
+            model_ids=("tabddpm",),
+        )

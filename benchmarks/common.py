@@ -67,13 +67,16 @@ def get_dataset_paths(name: str) -> dict[str, Path]:
     if name not in DATASET_REGISTRY:
         raise ValueError(f"Unknown dataset {name!r}. Expected one of {sorted(DATASET_REGISTRY)}")
 
-    return {
+    from .benchmark_models import get_benchmark_model_ids
+
+    paths = {
         "train": BENCHMARK_ROOT / "datasets" / f"{name}_train.csv",
         "test": BENCHMARK_ROOT / "datasets" / f"{name}_test.csv",
-        "ctgan": BENCHMARK_ROOT / "synthetic" / f"{name}_ctgan.csv",
-        "tvae": BENCHMARK_ROOT / "synthetic" / f"{name}_tvae.csv",
         "evaluation": BENCHMARK_ROOT / "results" / f"{name}_evaluation.csv",
     }
+    for model_id in get_benchmark_model_ids():
+        paths[model_id] = BENCHMARK_ROOT / "synthetic" / f"{name}_{model_id}.csv"
+    return paths
 
 
 def validate_dataframe_schema(

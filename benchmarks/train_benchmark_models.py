@@ -6,10 +6,10 @@ from typing import Callable
 
 import pandas as pd
 
+from . import benchmark_models
 from .common import (
     BENCHMARK_ROOT,
     DATASET_REGISTRY,
-    PROJECT_ROOT,
     ensure_benchmark_dirs,
     get_dataset_paths,
     log_benchmark_event,
@@ -18,12 +18,14 @@ from .common import (
     validate_target_values,
 )
 
-ADULT_CTGAN_SOURCE = PROJECT_ROOT / "results" / "ctgan_synthetic.csv"
-ADULT_TVAE_SOURCE = PROJECT_ROOT / "results" / "tvae_synthetic.csv"
 SYNTHETIC_ROW_COUNT = 10_000
 CTGAN_EPOCHS = 300
 CTGAN_BATCH_SIZE = 500
 TVAE_EPOCHS = 300
+
+
+def _benchmark_model_ids() -> tuple[str, ...]:
+    return benchmark_models.get_trainable_benchmark_model_ids()
 
 
 def detect_ctgan_discrete_columns(dataset_name: str, train_df: pd.DataFrame) -> list[str]:
@@ -76,34 +78,33 @@ def validate_synthetic_dataset(
     return warnings
 
 
-def copy_adult_synthetic_artifacts() -> tuple[pd.DataFrame, pd.DataFrame]:
+def copy_adult_synthetic_artifacts() -> dict[str, pd.DataFrame]:
     ensure_benchmark_dirs()
     spec = DATASET_REGISTRY["adult"]
     train_df = pd.read_csv(get_dataset_paths("adult")["train"])
+    promoted: dict[str, pd.DataFrame] = {}
 
-    ctgan_temp_df = pd.read_csv(ADULT_CTGAN_SOURCE)
-    tvae_temp_df = pd.read_csv(ADULT_TVAE_SOURCE)
+    for model_id in _benchmark_model_ids():
+        model_spec = benchmark_models.get_benchmark_model_spec(model_id)
+        if model_id == "tabddpm":
+            temp_df = _train_tabddpm_samples("adult", train_df, spec.target_col)
+        else:
+            if model_spec.adult_source_path is None:
+                raise RuntimeError(f"{model_spec.display_name} adult benchmark artifact seam is not configured")
 
-    promoted_ctgan_df, _ = _validate_and_promote_synthetic(
-        "adult",
-        "ctgan",
-        train_df,
-        ctgan_temp_df,
-        spec.target_col,
-        spec.valid_target_values,
-        expected_rows=None,
-    )
-    promoted_tvae_df, _ = _validate_and_promote_synthetic(
-        "adult",
-        "tvae",
-        train_df,
-        tvae_temp_df,
-        spec.target_col,
-        spec.valid_target_values,
-        expected_rows=None,
-    )
+            source_path = model_spec.adult_source_path
+            temp_df = pd.read_csv(source_path)
+        promoted[model_id], _ = _validate_and_promote_synthetic(
+            "adult",
+            model_id,
+            train_df,
+            temp_df,
+            spec.target_col,
+            spec.valid_target_values,
+            expected_rows=None,
+        )
 
-    return promoted_ctgan_df, promoted_tvae_df
+    return promoted
 
 
 def _load_ctgan_class():
@@ -117,6 +118,12 @@ def _load_tvae_dependencies():
     from sdv.single_table import TVAESynthesizer
 
     return SingleTableMetadata, TVAESynthesizer
+
+
+def _load_tabddpm_plugin():
+    from synthcity.plugins.generic.plugin_ddpm import TabDDPMPlugin
+
+    return TabDDPMPlugin
 
 
 def _warn(dataset_name: str, message: str) -> None:
@@ -178,12 +185,16 @@ def _validate_and_promote_synthetic(
 def _print_dataset_completion(
     dataset_name: str,
     target_col: str,
-    synth_ctgan: pd.DataFrame,
-    synth_tvae: pd.DataFrame,
+    synth_outputs: dict[str, pd.DataFrame],
 ) -> None:
-    print(f"{dataset_name} - CTGAN complete ✓  |  TVAE complete ✓")
-    print(f"Synthetic shape: {synth_ctgan.shape}")
-    print(f"Target distribution: {_format_target_distribution(synth_ctgan, target_col)}")
+    model_status = " | ".join(
+        f"{benchmark_models.get_benchmark_model_spec(model_id).display_name} complete"
+        for model_id in synth_outputs
+    )
+    first_output = next(iter(synth_outputs.values()))
+    print(f"{dataset_name} - {model_status}")
+    print(f"Synthetic shape: {first_output.shape}")
+    print(f"Target distribution: {_format_target_distribution(first_output, target_col)}")
 
 
 def _train_ctgan_samples(dataset_name: str, train_df: pd.DataFrame) -> pd.DataFrame:
@@ -203,6 +214,21 @@ def _train_tvae_samples(train_df: pd.DataFrame) -> pd.DataFrame:
     model = tvae_class(metadata, epochs=TVAE_EPOCHS)
     model.fit(train_df)
     synth_df = model.sample(num_rows=SYNTHETIC_ROW_COUNT)
+    if not isinstance(synth_df, pd.DataFrame):
+        synth_df = pd.DataFrame(synth_df, columns=train_df.columns)
+    return synth_df.reindex(columns=train_df.columns)
+
+
+def _train_tabddpm_samples(_dataset_name: str, train_df: pd.DataFrame, _target_col: str) -> pd.DataFrame:
+    if not benchmark_models.get_benchmark_model_spec("tabddpm").trainable:
+        raise RuntimeError("TABDDPM benchmark adapter requires synthcity with the ddpm plugin installed")
+
+    tabddpm_class = _load_tabddpm_plugin()
+    model = tabddpm_class(is_classification=True, n_iter=CTGAN_EPOCHS)
+    model.fit(train_df)
+    synth_df = model.generate(SYNTHETIC_ROW_COUNT)
+    if hasattr(synth_df, "dataframe"):
+        synth_df = synth_df.dataframe()
     if not isinstance(synth_df, pd.DataFrame):
         synth_df = pd.DataFrame(synth_df, columns=train_df.columns)
     return synth_df.reindex(columns=train_df.columns)
@@ -240,63 +266,79 @@ def _process_training_dataset(
     train_df: pd.DataFrame,
     target_col: str,
     valid_targets: set[int] | set[str] | None,
+    model_ids: tuple[str, ...] | None = None,
     ctgan_sampler: Callable[[str, pd.DataFrame], pd.DataFrame] = _train_ctgan_samples,
     tvae_sampler: Callable[[pd.DataFrame], pd.DataFrame] = _train_tvae_samples,
+    tabddpm_sampler: Callable[[str, pd.DataFrame, str], pd.DataFrame] | None = None,
 ) -> None:
     _validate_training_input(dataset_name, train_df)
 
-    synth_ctgan = _coerce_covertype_targets(dataset_name, ctgan_sampler(dataset_name, train_df), target_col)
-    saved_ctgan, ctgan_warnings = _validate_and_promote_synthetic(
-        dataset_name,
-        "ctgan",
-        train_df,
-        synth_ctgan,
-        target_col,
-        valid_targets,
-    )
+    if model_ids is None:
+        model_ids = _benchmark_model_ids()
 
-    synth_tvae = _coerce_covertype_targets(dataset_name, tvae_sampler(train_df), target_col)
-    saved_tvae, tvae_warnings = _validate_and_promote_synthetic(
-        dataset_name,
-        "tvae",
-        train_df,
-        synth_tvae,
-        target_col,
-        valid_targets,
-    )
+    if "tabddpm" in model_ids and tabddpm_sampler is None:
+        if benchmark_models.get_benchmark_model_spec("tabddpm").trainable:
+            tabddpm_sampler = _train_tabddpm_samples
+        else:
+            raise RuntimeError("TABDDPM benchmark adapter is not configured")
 
-    for warning in [*ctgan_warnings, *tvae_warnings]:
+    samplers: dict[str, Callable[[], pd.DataFrame]] = {
+        "ctgan": lambda: ctgan_sampler(dataset_name, train_df),
+        "tvae": lambda: tvae_sampler(train_df),
+        "tabddpm": (
+            lambda: tabddpm_sampler(dataset_name, train_df, target_col)
+            if tabddpm_sampler is not None
+            else (_ for _ in ()).throw(RuntimeError("TABDDPM benchmark adapter is not configured"))
+        ),
+    }
+    saved_outputs: dict[str, pd.DataFrame] = {}
+    warnings: list[str] = []
+
+    for model_id in model_ids:
+        if model_id not in samplers:
+            continue
+
+        synth_df = _coerce_covertype_targets(dataset_name, samplers[model_id](), target_col)
+        saved_output, model_warnings = _validate_and_promote_synthetic(
+            dataset_name,
+            model_id,
+            train_df,
+            synth_df,
+            target_col,
+            valid_targets,
+        )
+        saved_outputs[model_id] = saved_output
+        warnings.extend(model_warnings)
+
+    for warning in warnings:
         _warn(dataset_name, warning)
 
-    _print_dataset_completion(dataset_name, target_col, saved_ctgan, saved_tvae)
+    _print_dataset_completion(dataset_name, target_col, saved_outputs)
 
 
 def _process_adult_dataset() -> None:
     spec = DATASET_REGISTRY["adult"]
-    ctgan_df, tvae_df = copy_adult_synthetic_artifacts()
     train_df = pd.read_csv(get_dataset_paths("adult")["train"])
+    adult_outputs = copy_adult_synthetic_artifacts()
 
-    ctgan_warnings = _validate_saved_synthetic(
-        "adult",
-        train_df,
-        ctgan_df,
-        spec.target_col,
-        spec.valid_target_values,
-        expected_rows=None,
-    )
-    tvae_warnings = _validate_saved_synthetic(
-        "adult",
-        train_df,
-        tvae_df,
-        spec.target_col,
-        spec.valid_target_values,
-        expected_rows=None,
-    )
+    warnings: list[str] = []
+    for model_id in _benchmark_model_ids():
+        saved_output = adult_outputs[model_id]
+        warnings.extend(
+            _validate_saved_synthetic(
+                "adult",
+                train_df,
+                saved_output,
+                spec.target_col,
+                spec.valid_target_values,
+                expected_rows=None,
+            )
+        )
 
-    for warning in [*ctgan_warnings, *tvae_warnings]:
+    for warning in warnings:
         _warn("adult", warning)
 
-    _print_dataset_completion("adult", spec.target_col, ctgan_df, tvae_df)
+    _print_dataset_completion("adult", spec.target_col, adult_outputs)
 
 
 def main() -> None:
@@ -304,6 +346,7 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")
 
     ensure_benchmark_dirs()
+    model_ids = _benchmark_model_ids()
 
     dataset_order = ("adult", "bank", "covertype", "diabetes")
     for dataset_name in dataset_order:
@@ -318,6 +361,7 @@ def main() -> None:
             train_df=train_df,
             target_col=spec.target_col,
             valid_targets=spec.valid_target_values,
+            model_ids=model_ids,
         )
 
     print("All models trained ✓")

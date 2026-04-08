@@ -6,6 +6,7 @@ import time
 
 import pandas as pd
 
+from . import benchmark_models
 from .common import BENCHMARK_ROOT, get_dataset_paths
 from .visualize_benchmarks import MEAN_RANK_PATH, SUMMARY_PATH, required_plot_paths
 
@@ -17,6 +18,10 @@ def _configure_stdout_utf8() -> None:
 
 def _run_module(module_name: str) -> None:
     subprocess.run([sys.executable, "-m", module_name], check=True)
+
+
+def _benchmark_model_ids() -> tuple[str, ...]:
+    return benchmark_models.get_trainable_benchmark_model_ids()
 
 
 def _all_exist(paths) -> bool:
@@ -33,41 +38,43 @@ def _dataset_files() -> list:
 
 def _synthetic_files() -> list:
     paths = []
+    model_ids = _benchmark_model_ids()
     for dataset in ("bank", "covertype", "diabetes"):
         dataset_paths = get_dataset_paths(dataset)
-        paths.extend([dataset_paths["ctgan"], dataset_paths["tvae"]])
+        paths.extend([dataset_paths[model_id] for model_id in model_ids])
     return paths
 
 
 def main() -> None:
     _configure_stdout_utf8()
+    model_ids = _benchmark_model_ids()
     print("=" * 65)
     print("   CROSS-DOMAIN BENCHMARKING PIPELINE")
-    print("   4 Datasets x 2 Models x 4 Metrics")
+    print(f"   4 Datasets x {len(model_ids)} Models x 4 Metrics")
     print("=" * 65)
 
     start = time.time()
 
     if _all_exist(_dataset_files()):
-        print("  ✓ All datasets ready - skipping download")
+        print("  [ok] All datasets ready - skipping download")
     else:
         _run_module("benchmarks.download_datasets")
 
     for dataset in ("bank", "covertype", "diabetes"):
         dataset_paths = get_dataset_paths(dataset)
-        if dataset_paths["ctgan"].exists() and dataset_paths["tvae"].exists():
-            print(f"  ✓ {dataset} synthetic data exists - skipping")
+        if all(dataset_paths[model_id].exists() for model_id in model_ids):
+            print(f"  [ok] {dataset} synthetic data exists - skipping")
         else:
             _run_module("benchmarks.train_benchmark_models")
             break
 
     if SUMMARY_PATH.exists():
-        print("  ✓ Evaluation complete - skipping")
+        print("  [ok] Evaluation complete - skipping")
     else:
         _run_module("benchmarks.evaluate_benchmarks")
 
     if _all_exist(required_plot_paths()):
-        print("  ✓ All plots exist - skipping")
+        print("  [ok] All plots exist - skipping")
     else:
         _run_module("benchmarks.visualize_benchmarks")
 
