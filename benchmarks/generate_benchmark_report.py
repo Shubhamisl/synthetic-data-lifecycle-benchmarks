@@ -5,13 +5,19 @@ from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
-from docx import Document
-from docx.enum.section import WD_ORIENTATION, WD_SECTION
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+
+try:
+    from docx import Document
+    from docx.enum.section import WD_ORIENTATION, WD_SECTION
+    from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Inches, Pt, RGBColor
+except ModuleNotFoundError:
+    Document = None
+    WD_ORIENTATION = WD_SECTION = WD_ALIGN_VERTICAL = WD_TABLE_ALIGNMENT = WD_ALIGN_PARAGRAPH = None
+    OxmlElement = qn = Inches = Pt = RGBColor = None
 
 
 ROOT = Path(__file__).resolve().parent
@@ -92,9 +98,24 @@ def format_optional(value: float) -> str:
     return f"{value:.4f}"
 
 
-def build_summary_tables(summary: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str], str]:
+def _model_names(summary: pd.DataFrame) -> list[str]:
+    return summary["Model"].drop_duplicates().tolist()
+
+
+def _best_ranked_model(mean_rank: pd.DataFrame | None, column: str, fallback: str) -> str:
+    if mean_rank is None or column not in mean_rank.columns or mean_rank.empty:
+        return fallback
+    return str(mean_rank.loc[mean_rank[column].astype(float).idxmin(), "Model"])
+
+
+def build_summary_tables(
+    summary: pd.DataFrame,
+    mean_rank: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str], str]:
     enriched = summary.copy()
     enriched["Gap_to_Baseline_pp"] = enriched["TSTR_Real_Baseline"] - enriched["TSTR_Accuracy"]
+    model_names = _model_names(enriched)
+    model_list_text = ", ".join(model_names)
 
     compact_rows = []
     findings = []
@@ -156,22 +177,28 @@ def build_summary_tables(summary: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFr
     )
 
     hardest_dataset = enriched.groupby("Dataset")["Gap_to_Baseline_pp"].min().sort_values(ascending=False).index[0]
+    easiest_dataset = enriched.groupby("Dataset")["Gap_to_Baseline_pp"].min().sort_values().index[0]
     best_fidelity_dataset = enriched.groupby("Dataset")["JS_Divergence"].min().sort_values().index[0]
+    best_js_model = _best_ranked_model(mean_rank, "Mean_JS_Rank", str(enriched.loc[enriched["JS_Divergence"].idxmin(), "Model"]))
+    best_overall_model = _best_ranked_model(
+        mean_rank,
+        "Overall_Mean_Rank",
+        str(enriched.groupby("Model")["TSTR_Accuracy"].mean().sort_values(ascending=False).index[0]),
+    )
 
     insight_bullets = [
-        "CTGAN achieved the better mean JS rank, indicating stronger distributional fidelity on average.",
-        "TVAE achieved the better overall mean rank, largely because it produced lower average privacy risk and lower group disparity.",
-        "Bank Marketing was the easiest domain for synthetic utility retention, with CTGAN finishing only 0.76 percentage points below the real-data baseline.",
+        f"{best_js_model} achieved the better mean JS rank, indicating stronger distributional fidelity on average.",
+        f"{best_overall_model} achieved the better overall mean rank across the models present in this run.",
+        f"{easiest_dataset.title()} was the easiest domain for synthetic utility retention in this run.",
         f"{hardest_dataset.title()} was the hardest domain for synthetic utility retention in this run.",
         f"{best_fidelity_dataset.title()} produced the lowest observed JS divergence in the benchmark.",
     ]
 
     conclusion = (
-        "The benchmark shows that generator selection should be driven by deployment priorities rather than a "
-        "single metric. CTGAN is the stronger option when the primary goal is distributional fidelity, while "
-        "TVAE is the better default when privacy risk, fairness, and overall cross-domain robustness matter "
-        "more. The results also reinforce that domain effects are large: a model that performs near baseline "
-        "on marketing data can lose substantial downstream utility on ecological or medical data."
+        f"The benchmark compares {model_list_text} across utility, fidelity, privacy, and fairness. "
+        f"{best_overall_model} is the strongest overall option in this run, while {best_js_model} is the "
+        "strongest on fidelity. The results also reinforce that domain effects are large: a model that performs "
+        "near baseline on marketing data can lose substantial downstream utility on ecological or medical data."
     )
 
     return pd.DataFrame(compact_rows), detailed, findings, insight_bullets, conclusion
@@ -191,11 +218,18 @@ def add_plot_section(document: Document, title: str, filename: str, caption: str
 
 
 def generate_report() -> Path:
+    if Document is None:
+        raise ModuleNotFoundError("python-docx is required to generate the benchmark report")
+
     summary = pd.read_csv(RESULTS_DIR / "cross_domain_summary.csv")
     mean_rank = pd.read_csv(RESULTS_DIR / "mean_rank_table.csv")
     notes_path = RESULTS_DIR / "benchmark_run_notes.md"
+    model_names = ", ".join(summary["Model"].drop_duplicates().tolist())
 
-    compact_table, detailed_table, dataset_findings, insight_bullets, conclusion = build_summary_tables(summary)
+    compact_table, detailed_table, dataset_findings, insight_bullets, conclusion = build_summary_tables(
+        summary,
+        mean_rank,
+    )
 
     mean_rank_display = mean_rank.copy()
     for column in mean_rank_display.columns[1:]:
@@ -226,20 +260,16 @@ def generate_report() -> Path:
     document.add_paragraph()
     document.add_paragraph(
         "This report summarizes the verified cross-domain benchmark extension covering the Adult baseline, "
-        "Bank Marketing, Covertype, and Diabetes datasets. It compares CTGAN and TVAE across utility, "
+        f"Bank Marketing, Covertype, and Diabetes datasets. It compares {model_names} across utility, "
         "fidelity, privacy, and fairness metrics, and embeds the benchmark plots generated by the pipeline."
     )
 
     document.add_heading("Executive Summary", level=1)
     document.add_paragraph(
-        "Across four domains, no single synthetic generator dominated every metric. CTGAN led the benchmark "
-        "on average distributional fidelity, while TVAE achieved the better overall mean rank by producing "
-        "lower privacy leakage and lower average group disparity."
+        f"Across four domains, no single synthetic generator dominated every metric. {insight_bullets[0]}"
     )
     document.add_paragraph(
-        "The strongest near-baseline utility result came from CTGAN on Bank Marketing, where TSTR reached "
-        "88.51% against a real-data baseline of 89.27%. By contrast, Covertype was the hardest domain, "
-        "with both models trailing the real baseline substantially and TVAE outperforming CTGAN on utility."
+        f"{insight_bullets[1]} {insight_bullets[2]}"
     )
 
     document.add_heading("Benchmark Setup", level=1)
@@ -247,7 +277,7 @@ def generate_report() -> Path:
         document,
         [
             "Datasets: Adult (baseline), Bank Marketing, Covertype, and Pima Indians Diabetes.",
-            "Generators: CTGAN and TVAE, with Adult artifacts reused from the original project and the other datasets trained within benchmarks/.",
+            f"Generators: {model_names}, with Adult artifacts reused from the original project and the other datasets trained within benchmarks/.",
             "Metrics: JS divergence, TSTR utility, MIA advantage, and demographic parity difference where a sensitive attribute was available.",
             "Visual outputs: 4 publication-ready plots covering utility heatmaps, metric dashboards, mean-rank comparison, and privacy-utility trade-offs.",
             "Validation discipline: generated outputs were checked for schema consistency, target validity, zero NaN values, and benchmark-specific constraints.",
@@ -279,8 +309,8 @@ def generate_report() -> Path:
 
     document.add_heading("Mean Rank Comparison", level=1)
     document.add_paragraph(
-        "Lower mean rank indicates stronger overall performance for a metric. CTGAN and TVAE tied on mean TSTR rank, "
-        "but TVAE achieved the better overall mean rank because its privacy and fairness ranks were stronger."
+        "Lower mean rank indicates stronger overall performance for a metric. The table below reflects the models "
+        "present in this run, with lower values indicating stronger aggregate performance."
     )
     add_dataframe_table(document, mean_rank_display)
 
@@ -318,12 +348,10 @@ def generate_report() -> Path:
     document.add_heading("Key Findings", level=1)
     add_bullet_list(
         document,
-        [
-            "CTGAN is the stronger generator for preserving statistical fidelity on average, as shown by the best mean JS rank.",
-            "TVAE is the stronger default for privacy and fairness-sensitive use cases, with the best overall mean rank and lower average MIA and DP ranks.",
+        insight_bullets
+        + [
             "Utility behavior is strongly domain dependent, so a single benchmark dataset is not sufficient for model selection.",
-            "Bank Marketing is the clearest example of successful synthetic retention of downstream utility in this benchmark.",
-            "Covertype remains the most challenging domain and should be treated as a stress-test dataset rather than a routine success case.",
+            "The benchmark should be interpreted as a model-ranking snapshot for the specific registry state and available training artifacts used in this run.",
         ],
     )
 
@@ -338,7 +366,7 @@ def generate_report() -> Path:
         document,
         [
             'Bank categorical missing values were normalized to "unknown" before splitting and training.',
-            "Covertype CTGAN used only the true indicator and categorical columns as discrete features because the literal all-columns-discrete configuration exceeded available memory.",
+            "Covertype used only the true indicator and categorical columns as discrete features because the literal all-columns-discrete configuration exceeded available memory.",
         ],
     )
     document.add_paragraph(

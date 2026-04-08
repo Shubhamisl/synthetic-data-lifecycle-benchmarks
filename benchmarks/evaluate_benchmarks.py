@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
+from . import benchmark_models
 from .common import (
     BENCHMARK_ROOT,
     DATASET_REGISTRY,
@@ -17,7 +18,13 @@ from .common import (
 RESULTS_DIR = BENCHMARK_ROOT / "results"
 SUMMARY_PATH = RESULTS_DIR / "cross_domain_summary.csv"
 MEAN_RANK_PATH = RESULTS_DIR / "mean_rank_table.csv"
-MODEL_NAMES = ("CTGAN", "TVAE")
+
+
+def _evaluation_model_specs() -> tuple[benchmark_models.BenchmarkModelSpec, ...]:
+    return tuple(
+        benchmark_models.get_benchmark_model_spec(model_id)
+        for model_id in benchmark_models.get_trainable_benchmark_model_ids()
+    )
 
 
 def demographic_parity_difference(
@@ -204,6 +211,7 @@ def _display_summary(summary_df: pd.DataFrame) -> str:
 def main() -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     summary_rows: list[dict[str, object]] = []
+    model_specs = _evaluation_model_specs()
 
     for dataset_name in ("adult", "bank", "covertype", "diabetes"):
         spec = DATASET_REGISTRY[dataset_name]
@@ -213,8 +221,8 @@ def main() -> None:
         per_dataset_rows: list[dict[str, object]] = []
         baseline_accuracy = tstr_accuracy(real_train, real_test, spec.target_col)
 
-        for model_name in MODEL_NAMES:
-            synth_df = pd.read_csv(paths[model_name.lower()])
+        for model_spec in model_specs:
+            synth_df = pd.read_csv(paths[model_spec.model_id])
             _validate_evaluation_inputs(
                 dataset_name,
                 real_train,
@@ -229,7 +237,7 @@ def main() -> None:
                 "Dataset": dataset_name,
                 "Domain": spec.domain,
                 "Fidelity_Level": spec.fidelity_level,
-                "Model": model_name,
+                "Model": model_spec.display_name,
                 "JS_Divergence": mean_js_divergence(
                     real_train,
                     synth_df,
