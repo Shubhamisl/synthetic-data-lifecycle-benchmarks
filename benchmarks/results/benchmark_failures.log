@@ -1,0 +1,6 @@
+2026-04-09T10:57:54.497436+00:00	download	adult	ERROR	Failed to prepare adult dataset: [Errno 2] No such file or directory: 'C:\\Users\\Safal Kumar\\Desktop\\synthetic-data-lifecycle-benchmarks\\data\\adult_train.csv'
+2026-04-09T11:01:21.045960+00:00	download	adult	WARNING	adult evaluation source missing at C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\results\final_evaluation_table.csv; continuing without copied evaluation CSV
+2026-04-09T11:07:51.610609+00:00	download	covertype	WARNING	ucimlrepo failed, using direct UCI fallback: IncompleteRead(27942837 bytes read)
+2026-04-09T11:38:33.027433+00:00	training	covertype	WARNING	covertype: column Soil_Type7 is constant
+2026-04-09T11:38:33.027433+00:00	training	covertype	WARNING	covertype: column Soil_Type15 is constant
+2026-04-09T11:38:33.027433+00:00	training	covertype	WARNING	covertype: column Soil_Type36 is constant

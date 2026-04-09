@@ -1,0 +1,5 @@
+2026-04-08T18:54:25.118410+00:00	download	adult	WARNING	adult evaluation source missing at /content/drive/MyDrive/direction3_multidataset_workspace/synthetic-data-lifecycle-benchmarks/results/final_evaluation_table.csv; continuing without copied evaluation CSV
+2026-04-08T20:12:47.809695+00:00	download	adult	WARNING	adult evaluation source missing at /content/drive/MyDrive/direction3_multidataset_workspace/synthetic-data-lifecycle-benchmarks/results/final_evaluation_table.csv; continuing without copied evaluation CSV
+2026-04-08T20:21:00.339639+00:00	download	adult	WARNING	adult evaluation source missing at /content/drive/MyDrive/direction3_multidataset_workspace/synthetic-data-lifecycle-benchmarks/results/final_evaluation_table.csv; continuing without copied evaluation CSV
+2026-04-08T21:59:05.266438+00:00	training	covertype	WARNING	covertype: column Soil_Type7 is constant
+2026-04-08T21:59:05.273899+00:00	training	covertype	WARNING	covertype: column Soil_Type15 is constant
