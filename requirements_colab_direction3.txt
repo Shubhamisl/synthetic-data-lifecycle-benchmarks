@@ -1,6 +1,7 @@
 ctgan
 sdv
 sdmetrics
+synthcity
 fairlearn>=0.10.0
 scikit-learn
 pandas

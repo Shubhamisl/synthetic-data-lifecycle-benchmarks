@@ -1,6 +1,7 @@
 ctgan
 sdv
 sdmetrics
+synthcity
 tensorflow-privacy  # NOTE: may require tensorflow<2.16 for full estimator support
 fairlearn
 scikit-learn

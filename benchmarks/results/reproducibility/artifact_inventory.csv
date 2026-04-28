@@ -1,0 +1,34 @@
+category,name,path,present,bytes,mtime_utc
+dataset,adult train,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\adult_train.csv,True,3856157.0,2026-04-09T11:00:35.363004+00:00
+dataset,adult test,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\adult_test.csv,True,964089.0,2026-04-09T11:00:35.383613+00:00
+synthetic,adult CTGAN,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\adult_ctgan.csv,True,1070987.0,2026-04-09T12:00:06.532756+00:00
+synthetic,adult TVAE,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\adult_tvae.csv,True,1061182.0,2026-04-09T12:00:06.580245+00:00
+synthetic,adult TABDDPM,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\adult_tabddpm.csv,True,1068427.0,2026-04-09T11:18:15.202126+00:00
+dataset,bank train,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\bank_train.csv,True,2932371.0,2026-04-09T11:01:36.151532+00:00
+dataset,bank test,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\bank_test.csv,True,733365.0,2026-04-09T11:01:36.173109+00:00
+synthetic,bank CTGAN,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\bank_ctgan.csv,True,809536.0,2026-04-09T12:00:06.557060+00:00
+synthetic,bank TVAE,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\bank_tvae.csv,True,797929.0,2026-04-09T12:00:06.596081+00:00
+synthetic,bank TABDDPM,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\bank_tabddpm.csv,True,811292.0,2026-04-09T11:23:40.491122+00:00
+dataset,covertype train,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\covertype_train.csv,True,6061027.0,2026-04-09T11:13:33.848312+00:00
+dataset,covertype test,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\covertype_test.csv,True,1515567.0,2026-04-09T11:13:33.899620+00:00
+synthetic,covertype CTGAN,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\covertype_ctgan.csv,True,1301229.0,2026-04-09T12:05:59.603674+00:00
+synthetic,covertype TVAE,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\covertype_tvae.csv,True,1304425.0,2026-04-09T12:05:59.675060+00:00
+synthetic,covertype TABDDPM,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\covertype_tabddpm.csv,True,1303408.0,2026-04-09T11:38:32.984350+00:00
+dataset,diabetes train,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\diabetes_train.csv,True,26816.0,2026-04-09T11:13:34.434813+00:00
+dataset,diabetes test,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\datasets\diabetes_test.csv,True,6820.0,2026-04-09T11:13:34.434813+00:00
+synthetic,diabetes CTGAN,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\diabetes_ctgan.csv,True,1210752.0,2026-04-09T12:00:06.580245+00:00
+synthetic,diabetes TVAE,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\diabetes_tvae.csv,True,425317.0,2026-04-09T12:00:06.612056+00:00
+synthetic,diabetes TABDDPM,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\synthetic\diabetes_tabddpm.csv,True,534216.0,2026-04-09T11:41:41.573057+00:00
+benchmark_results,cross-domain summary,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\cross_domain_summary.csv,True,1168.0,2026-04-09T07:10:52.561543+00:00
+benchmark_results,mean rank table,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\mean_rank_table.csv,True,197.0,2026-04-09T07:10:52.561543+00:00
+benchmark_results,benchmark run notes,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\benchmark_run_notes.md,True,2778.0,2026-04-09T07:10:52.561543+00:00
+benchmark_results,benchmark research summary,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\benchmark_research_summary.md,True,4156.0,2026-04-09T07:10:52.561543+00:00
+benchmark_results,benchmark failures log,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\benchmark_failures.log,True,903.0,2026-04-09T11:38:33.027433+00:00
+benchmark_results,cross-domain report,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\cross_domain_benchmark_report.docx,False,,N/A
+benchmark_results,compute summary,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\compute\compute_summary.csv,True,3676.0,2026-04-09T12:07:18.545467+00:00
+benchmark_results,compute markdown,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\compute\compute_summary.md,True,1476.0,2026-04-09T12:07:18.545467+00:00
+benchmark_results,reproducibility manifest,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\reproducibility\reproducibility_manifest.csv,False,,N/A
+benchmark_results,artifact inventory,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\benchmarks\results\reproducibility\artifact_inventory.csv,False,,N/A
+dp_triangle,adult dp triangle dashboard,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\colab_artifacts\results\dp_triangle_dashboard.csv,False,,N/A
+dp_triangle,adult direction3 findings,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\colab_artifacts\results\direction3_final_findings.md,False,,N/A
+dp_triangle,adult direction3 methodology,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\colab_artifacts\results\direction3_methodology_note.md,False,,N/A

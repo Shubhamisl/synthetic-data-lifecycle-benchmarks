@@ -1,0 +1,4 @@
+model_id,display_name,available,trainable,adult_source_path,adult_source_present,adult_source_bytes,adult_source_mtime_utc
+ctgan,CTGAN,True,True,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\results\ctgan_synthetic.csv,False,,N/A
+tvae,TVAE,True,True,C:\Users\Safal Kumar\Desktop\synthetic-data-lifecycle-benchmarks\results\tvae_synthetic.csv,False,,N/A
+tabddpm,TABDDPM,True,True,N/A,False,,N/A
